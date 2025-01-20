@@ -6,7 +6,7 @@ Nestjs uses Express.js under the hood by default. If you're familiar with [types
 
 An important note is that the [documentation of Nestjs](https://docs.nestjs.com/) is comprehansive, and you would benefit from looking it up. Here, we attempt to put the knowledge in order, but we also sometimes lik to the official docs. We also refer to the Express framework to highlight the advantages of using Nestjs. To benefit from this article more, some experience with Express might be useful, but not necessary.
 
-> If you want to look into the core of Node.js, i recommend checking out the [Node.js Typescript series] (http://wanago.io/2019/02/11/node-js-typescript-modules-file-system/). It covers topics such as streams, event loop, multiple processes and multithreading with worker threads. Also, knowing how to create an API without any frameworks such as Express and Nestjs makes us apprieciate them even more.
+> If you want to look into the core of Node.js, i recommend checking out the [Node.js Typescript series](http://wanago.io/2019/02/11/node-js-typescript-modules-file-system/). It covers topics such as streams, event loop, multiple processes and multithreading with worker threads. Also, knowing how to create an API without any frameworks such as Express and Nestjs makes us apprieciate them even more.
 
 # Getting started with Nestjs
 
@@ -92,3 +92,28 @@ The way to extract the value of a route parameter is to use the `@Param()` decor
 
 Since route parameters are strings and our ids are number, we need to convert the params first.
 > We can also use **pipes** to transform the route params. Pipes are built-in feature in NestJS and we conver them later.
+
+# Accessing the body of a request
+
+When we handle POST and PUT in the controller above, we also need to access the body of a request. By doing so, we can use it to populate our database.
+
+NestJS provides a  `@Body()` decorator that gives us easy access to the body. Just as in the [Typescript Express series](http://wanago.io/2018/12/17/typescript-express-error-handling-validation/), we introduce the concept of a Data Transfer Object (DTO). It defines the format of the data sent in a request. It can be either an interface or a class, but using the latter gives us more possibilities and we explore them later on.
+
+> createPost.dto.ts
+
+```typescript
+export class CreatePostDto {
+  content: string;
+  title: string;
+}
+```
+
+> updatePost.dto.ts
+
+```typescript
+export class UpdatePostDto {
+  id: number;
+  content: string;
+  title: string;
+}
+```
