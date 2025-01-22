@@ -117,3 +117,192 @@ export class UpdatePostDto {
   title: string;
 }
 ```
+
+# The argurememts of a handler function
+Let's look into the arguments of the handler function a bit more.
+
+```typescript
+async replacePost(@Body() post: UpdatePostDto, @Param('id') id: string) {
+  return this.postsService.replacePost(Number(id), post);
+}
+```
+By using the method argument decorators, we tell NestJS to inject particular arguments into our methods. NestJs is built around the concept of Dependency Injection and Inversion of Control. We elaborate on in a lot as we go through various features.
+
+> Dependency Injection is one of the techniques that implement Inversion of Control. If you want read a bit more about IoC, check out [Applying SOLID principles to your Typescript code](http://wanago.io/2020/02/03/applying-solid-principles-to-your-typescript-code/)
+
+An important note is that reversing their order yields the same result, which might seem counter-intuitive at first.
+
+```typescript
+async replacePost(@Param('id') id: string, @Body() post: UpdatePostDto) {
+  return this.postsService.replacePost(Number(id), post);
+}
+```
+
+# Advantages of NestJS over Express
+NestJs gives us a lot of things out of the box and expects us to design our API using **controllers**. ExpressJS, on the other hand, leaves us more flexibility but does not equip us with such tools to maintain the readability of our code.
+
+We are free to implement controllers on our own with ExpressJS. We do it in the [Typescript Express series](http://wanago.io/2018/12/03/typescript-express-tutorial-routing-controllers-middleware/)
+
+```typescript
+import { Request, Response, Router } from 'express';
+import Controller from '../../interfaces/controller.interface';
+import PostsService from './posts.service';
+import CreatePostDto from './dto/createPost.dto';
+import UpdatePostDto from './dto/updatePost.dto';
+
+export default class PostController implements Controller {
+  private path = '/posts';
+  private router = Router();
+  private postsService = new PostsService();
+
+  constructor() {
+    this.initializeRoutes();
+  }
+
+  initializeRoutes() {
+    this.router.get(this.path, this.getAllPosts);
+    this.router.get(`${this.path}/:id`, this.getPostById);
+    this.router.post(this.path, this.createPost);
+    this.router.put(`${this.path}/:id`, this.replacePost);
+  }
+
+  private getAllPosts = (request: Request, response: Response) => {
+    const posts = this.postsService.getAllPosts();
+    response.send(posts);
+  }
+
+  private getPostById = (request: Request, response: Response) => {
+    const id = request.params.id;
+    const post = this.postsService.getPostById(Number(id));
+    response.send(post);
+  }
+
+  private createPost = (request: Request, response: Response) => {
+    const post: CreatePostDto = request.body;
+    const createPost = this.postsService.createPost(post);
+    response.send(createPost);
+  }
+
+  private replacePost = (request: Request, response: Response) => {
+    const id = request.params.id;
+    const post: UpdatePostDto = request.body;
+    const replacePost = this.postsService.replacePost(Number(id), post);
+    response.send(replacePost);
+  }
+
+  private deletePost = (request: Request, response: Response) => {
+    const id = request.params.id;
+    this.postsService.deletePost(Number(id));
+    response.sendStatus(200);
+  }
+}
+```
+Above, we can see a similar controller created in pure Express. There are quite a few notable differences.
+First, we need to handle the routing of the controller ourselves. We don't have such convenient decoractors that we can depend on to do it for us. The way NestJS works here resembles a bit Spring Framework written for Java.
+
+In the [Typescript Express series](http://wanago.io/2018/12/03/typescript-express-tutorial-routing-controllers-middleware/), we use an `Application` class that attaches the routing to the app.
+
+```typescript
+  class Application {
+    // ...
+    private initializeContrllers(controllers: Controller[]) {
+      controllers.forEach((controller) => {
+        this.app.use('/', controller.router);
+      })
+    }
+    // ...   
+  }
+```
+
+Another big advantage of NestJS is that it provides us with an elegant way of handling the **Request** and **Response** objects. Decorators such as `@Body()` and `@Param()` help to improve the readability of our code.
+
+One of the most useful things NestJS has to offer is how it handles responses. Our route handlers can return primitive types (for example, string), promises, or even RxJS observable streams. We don't need to handle it manually every time and use the `response.send` function. NestJS also makes it easy to handle errors in our application, and we explore it in the upcoming parts of this series.
+
+> When using NestJS, we can also manipulate the [Request](https://docs.nestjs.com/controllers#request-object) and [Response](https://docs.nestjs.com/controllers#appendix-library-specific-approach) objects directly.
+Handling responses ourselves strips us from some of the advantages of NestJS though.
+
+There is also a difference in how we can handle dependencies in pur Express and NestJS.
+In the above Express controller, we create a new `postsService` directly in the `PostsController`.
+Unfortunately, it breaks the **Dependency inversion principle** from the SOLID principles. One of the issues that can cause is some trouble with writing tests.
+
+NestJS, on the other hand, cares about compliance with the Dependency inversion principle a lot by implementing Dependency Injection.
+
+# Services
+The `typescript-starter` repository also contains our first service. A job of a services is to separate the business logic from controllers, making it cleaner and more comfortable to test.
+Let's create a simple service for our posts.
+
+> posts.service.ts
+
+```typescript
+import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
+import CreatePostDto from './dto/createPost.dto';
+import Post from './post.interface';
+import UpdatePostDto from './dto/updatePost.dto';
+
+@Injectable()
+export default class PostsService {
+  private lastPostId = 0;
+  private posts: Post[] = [];
+
+  getAllPosts() {
+    return this.posts;
+  }
+
+  getPostById(id: number) {
+    const post = this.posts.find(post => post.id === id);
+    if (post) {
+      return post;
+    }
+
+    throw new HttpException('Post not found', HttpStatus.NOT_FOUND);
+  }
+
+  replacePost(id: number, post: UpdatePostDto) {
+    const postIndex = this.posts.findIndex(p => p.id === id);
+
+    if (postIndex > -1) {
+      this.posts[postIndex] = post;
+      return post;
+    }
+
+    throw new HttpException('Post not found', HttpStatus.NOT_FOUND);
+  }
+
+  createPost(post: CreatePostDto) {
+    const newPost = {
+      id: ++this.lastPostId,
+      ...post
+    };
+
+    this.posts.push(newPost);
+    return newPost;
+  }
+
+  deletePost(id: number) {
+    const postIndex = this.posts.findIndex(p => p.id === id);
+
+    if (postIndex > -1) {
+      this.posts.splice(postIndex, 1);
+    } else {
+      throw new HttpException('Post not found', HttpStatus.NOT_FOUND);
+    }
+  }
+}
+```
+White the above logic is straightforward, there are a few noteworthy lines there.
+
+We use the built-in `HttpException` class to throw errors that NestJS can understand. When we throw `HttpException('Post not found', HttpStatus.NOT_FOUND)`, it gets propagated to the **global exception filter**, and a proper response is sent to client. We explore this topic more in the upcoming parts of this series.
+![](https://wanago.io/wp-content/uploads/2020/05/Screenshot-from-2020-05-10-17-39-24.png)
+
+The `@Injectable()` decorator tells Nest that this class is a provider. Thanks to that, we can add it in to a module
+
+
+
+
+
+
+
+
+
+
+
