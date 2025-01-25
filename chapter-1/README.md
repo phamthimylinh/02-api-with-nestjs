@@ -296,13 +296,70 @@ We use the built-in `HttpException` class to throw errors that NestJS can unders
 
 The `@Injectable()` decorator tells Nest that this class is a provider. Thanks to that, we can add it in to a module
 
+# Modules
+we use modules to organize our application. Our  `PostsController` and `PostsService` are closely related and belong to the same application domain. Therefore, it is appropriate to put them in a module together.
 
+By doing so, we organize our code per feature. This is especially useful as your application grows.
+> posts.module.ts
 
+```typescript
+import { Module } from '@nestjs/common';
+import PostsController from './posts.controller';
+import PostsService from './posts.service';
 
+@Module({
+  imports: [],
+  controllers: [PostsController],
+  providers: [PostsService],
+})
 
+export default class PostsModule {}
+```
+ Also, every application needs a **root module**. It is a starting point for NestJS when building the application.
 
+ > app.module.ts
+ ```typescript
+import { Module } from '@nestjs/common';
+import { PostModule } from './posts/posts.module';
 
+@Module({
+  imports: [PostModule],
+  controllers: [PostsController],
+  providers: [PostsService],
+})
 
+export default class AppModule {}
+```
+The module contains:
+- imports 
+  - imported modules - NestJS uses the `PostModule` thanks to importing it in our `AppModule`.
 
+- controllers
+  - controllers to instantiate.
 
+- providers
+  - providers to instantiate - they may be used at least across this module
 
+- exports
+  - a subset of providers that are available in other modules.
+
+# Summary
+By doing all of the above, our **src** directory ends up like that:
+```bash
+├── src
+│   ├── app.module.ts
+│   ├── main.ts
+│   └── posts
+│       ├── dto
+│       │   ├── createPost.dto.ts
+│       │   └── updatePost.dto.ts
+│       ├── post.interface.ts
+│       ├── posts.controller.ts
+│       ├── posts.module.ts
+│       └── posts.service.ts
+```
+
+In this article, we've just got started with NestJS. We've figured out what is a **Controlelr** and how to handle elementary routing in our application. We've also briefly touched the topic of **Services** and **Modules**. In the upcoming parts of this series, we will spend quite some time discussing the applications structure in NestJS.
+
+All of above knowledge is just the tip of the NestJS iceberg. Hopefully, it convinces you that it is worth looking into this framework as it provides lots of value. There is a lot to say about features that NestJS delivers, such as neat error handling and dependency injection. We will also look into the PostgreSQL database and how to use it both through ORM and SQL statements.
+You can expect it in this series, and more, so stay tuned!
