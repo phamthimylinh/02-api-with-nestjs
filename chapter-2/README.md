@@ -282,6 +282,120 @@ Also, out `CREATE TABLE` query puts a **constraint** on ids so that they are alw
 > PK_be5fda3aac270b134ff9c21cdee is a name of the above constaint and was generated
 
 # Repository
+With **repositories**, we can manage a particular entity. A repository has multiple functions to interact with entities. To access it, we use the `TypeOrmModule` again.
+
+> posts.module.ts
+```typescript
+import { Module } from '@nestjs/common';
+import PostsController from './posts.controller';
+import PostsService from './posts.service';
+import Post from './posts.entity';
+import { TypeOrmModule } from '@nestjs/typeorm';
+
+@Module({
+  imports: [TypeOrmModule.forFeature([Post])],
+  controllers: [PostsController],
+  providers: [PostsService]
+})
+
+export class PostsModule {}
+```
+Now, in our `PostsService`, we can inject to Posts repository
+
+> import { InjectRepository } form '@nestjs/typeorm'
+
+```typescript
+contructor(
+  @InjectRepository(Post)
+  private postsRepository: Repository<PostEntity>
+){}
+```
+
+## Finding
+With the `find` function, we can get multiple elements. If we don't provide ith with any options, it returns all.
+
+```typescript
+getAllPosts() {
+  return this.postsRepository.find();
+}
+```
+To get just one element we use the `findOne` function. By providing it with a number we indicate that we want an element with a particular id. If the result is undefined, it means that the element wasn't found.
+
+```typescript
+async getPostById(id: number) {
+  const post = await this.postsRepository.findOne(id);
+  if (post) {
+    return post;
+  }
+  throw new HttpException('Post not found', HttpStatus.NOT_FOUND);
+}
+```
+
+## Creating 
+By using the `create` function, we can instantiate a new Post. We can use the `save` function afterward to populate the database  with our new entity.
+
+```typescript
+async createPost(post: CreatePostDto) {
+  const newPost = await this.postsRepository.create(post)
+  await this.postsRepository.save(newPost);
+  return newPost;
+}
+```
+
+## Modifying
+To modify an existing element, we can use `update` function. Afterward, we would use the `findOne` function to return the modify element
+
+```typescript
+async updatePost(id: number, post: updatePostDto) {
+  await this.postsRepository.update(id, post);
+  const updatePost = await this.postsRepository.findOne(id);
+  if (updatePost) {
+    return updatePost;
+  }
+
+  throw new HttpException('Post not found', HttpStatus.NOT_FOUND)
+}
+```
+
+A significant thing is that it accepts a partial entity, so it acts as a PATCH, not as a PUT. If you want to read more on PUT vs PATCH (although with mongoDB), check out [Typescript Express tutorial #15 Using PUT vs PATCH in MongoDB with Mongoose](http://wanago.io/2020/04/27/typescript-express-put-vs-patch-mongodb-mongoose/)
+## Deleting
+To delete an element with a given id, we can use the `delete` function
+```typescript
+async deletePost(id: number) {
+  const deleteResponse = await this.postsRepository.delete(id);
+  if(!deleteReponse.affected) {
+    throw new HttpException('Post not found', HttpStatus.NOT_FOUND);
+  }
+}
+```
+By checking out the [documentation of the DELETE command](https://www.postgresql.org/docs/11/sql-delete.html), we can see that we have access to the count of removed elements. This data is available in the `affected` property. If it equals zero, we can assume that the element does not exist.
+
+## Handling asynchronous errors
+A benificial thing about NestJS controllers is that they handle asynchronous errors very well.
+
+```typescript
+@Get(':id')
+getPostById(@Param('id') id: string) {
+  return this.postsService.getPostById(Number(id));
+}
+```
+If the `getPostById` function throws an error; NestJS catches it automatically and parses it. When using pure Express, we would do this ourselves:
+
+```typescript
+getAllPost = async(request: Request, response: Response, next: Next) => {
+  const id = request.params.id;
+  try {
+    const post = await this.postsService.getPostById();
+    response.send(post);
+  } catch(error){
+    next(error);
+  }
+}
+```
+# Summary
+In this artical, we've gone through the basics of connecting our NextJS application with a PostgreSQL database. Not only, did we use TypeORM, but we've also looked into some SQL queries. NestJS and TypeORM have lots of features built-in and ready to use. In the upcoming parts of this series, we will look into them more, so stay tuned!
+
+
 
 
 
