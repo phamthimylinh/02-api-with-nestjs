@@ -91,7 +91,142 @@ export class UsersModule {}
 ```
 
 # Handling passwords
+An essential thing about registration is that we don't want to save passwords in plain text. If at any time our database gets breached, our passwords would have been directly exposed.
 
+To make passwords more secure, we **hash** them. In this process, the hashing algorithmn transforms one string into another string. If we change just one character of a string, the outcome is entirely different.
+
+The above operation can only be performed one way and can't be reversed easily. This means that we don't know the passwords of our users. When the user attempts to log in, we need to perform this operation once again. Then, we compare the outcome with the one saved in the database.
+
+Since hashing the same string twice gives the result, we use **salt**. It prevents users that have the same password from having the same hash. Salt is a random string added to the original password to achieve a different result every time.
+
+## Using bcrypt
+We use the **bcrypt** hashing algorithmn implemented by the [bcrypt npm package](https://www.npmjs.com/package/bcrypt). It takes care of hashing the strings, comparing plain string with hashes, and appending salt.
+
+Using **bcrypt** might be an intensive task for CPU. Fortunately, our bcrypt implementation uses a thread pool that allows it run in an additional thread. Thanks to that, our application can perform other tasks while genarating the hash.
+
+> npm install @type/bcrypt bcrypt
+
+When we use bcrypt, we define **salt rounds**. It boils down to being a cost factor and controls the time needed to receive a result.
+Increasing it by one doubles the time. The bigger the cost factor, the more difficult it is to reverse the hash with brute-forcing. Generally speaking, 10 salt rounds should be fine.
+
+The **salt** use for hashing is a part of the result, so no need to keep it separately
+
+```typescript
+const passwordInPlainText = '12345678';
+const hashedPassword = await bcrypt.hash(passwordInPlainText, 10);
+
+const isPasswordMatching = await bcrypt.compare(passwordInPlainText, hashedPassword);
+console.log(isPasswordMatching) // true
+```
+
+## Creating is the authentication service
+With all of the above knowledge, we can start implementing basic registering and logging in functionalities. To do so, we need to define an authentication service first.
+
+> **Authentication** means checking the identity of user. It providers an answer to a question: who is the user?
+
+> **Authentication** is about access to resources. It answers the question: is user authorized to perform this operation?
+
+> authentication/authentication.service.ts
+
+```typescript
+export class AuthenticationService {
+  constructor(
+    private readonly usersService: UsersService
+  ) {}
+
+  public async register(registrationData: RegisterD) {
+      const hashedPassword = await bcrypt.hash(registrationData.password, 10);
+      try {
+        const createdUser = await this.usersService.create({
+          ...registrationData,
+          password: hashedPassword
+        });
+        createdUser.password = undefined;
+        return createdUser;
+      } catch(error) {
+        if (error?.code === PostgreErrorCode.UniqueViolation) {
+          throw new HttpException('User with that email already exists', HttpStatus.BAD_REQUEST);
+        }
+        throw new HttpException('Something went wrong', HttpStatus.INTERNAL_SERVER_ERROR);
+      }
+  }
+}
+```
+
+> `createdUser.password = undefined` is not the cleanest way to not send the password in a response. In the upcoming parts of this series we explore mechainsms that help us with that.
+
+A few notable things are happening above. We create a hash and pass it to the `usersService.create` method along with the rest of the data. We use a `try ... catch` statement here because there is an important case when it might fail.
+If a user with that email already exist, the `usersService.create` method throws an error.
+Since our unique column cases it the error comes from Postgres.
+
+To understand the error, we need to look into the [PostgreSQL Error Codes documentation page](https://www.postgresql.org/docs/9.2/errcodes-appendix.html). Since the code for **uniqe_violation** is **23505**, we can create an enum to handle it cleanly.
+
+> database/postgresErrorCodes.enum.ts
+```typescript
+enum PostgreErrorCode {
+  UniqueViolation = '23505';
+}
+```
+
+> Since in the above service we state explicitly that a user with this email already exists, it might a good idea to implement a mechainsms preventing attackers from brute-forcing our API in order to get a list registered emails
+
+The thing left for us to do is to implement the logging in.
+
+> authentication/authentication.service.ts
+
+```typescript
+export class AuthenticationService {
+  constructor(
+    private readonly usersService: UsersService
+  ) {}
+
+  public async getAuthenticatedUser(email: string, hashedPassword: string) {
+    try {
+      const user = await this.usersService.getByEmail(email);
+      const isPasswordMatching = await bcrypt.compare(
+        hashedPassword,
+        user.password
+      )
+      if(!isPasswordMatching) {
+        throw new HttpException('Wrong credentials provided', HttpStatus.BAD_REQUEST);
+      }
+      user.password = undefined;
+      return user;
+    } catch(err) {
+      throw new HttpException('Wrong credentials provided',HttpStatus.BAD_REQUEST);
+    }
+  }
+}
+```
+
+An import thing above is that we return the same error, whether the email or password is wrong. Doing so prevents some attacks that would aim to get a list of emails registered in our database.
+
+There is one small thing about the above code that we might want to improve. Within our `logIn` method, we throw an exception that we then catch locally. It might be considered confusing. Let's create a separate method to verify the password:
+```typescript
+public async getAuthenticatedUser(email: string, plainTextPassword: string)
+{
+  try {
+    const user = await this.usersService.getByEmail(emai);
+    await this.verifyPassword(plainTextPassword, user.password);
+    user.password = undefined;
+    return user;
+  } catch (err) {
+    throw new HttpException('Wrong credentials provided', HttpStatus.BAD_REQUEST);
+  }
+}
+
+private async verifyPassword(plainTextPassword: string, password: string)
+{
+  const isPasswordMatching = await bcrypt.compare(
+    plainTextPassword,
+    password
+  )
+
+  if (!isPasswordMatching) {
+    throw new HttpException('Wrong credentials provided', HttpStatus.BAD_REQUEST);
+  }
+}
+```
 
 
 
