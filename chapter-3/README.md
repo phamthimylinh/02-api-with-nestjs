@@ -227,6 +227,93 @@ private async verifyPassword(plainTextPassword: string, password: string)
   }
 }
 ```
+# Integrating our authentication with passport
+In the [Typescript Express series](http://wanago.io/2018/12/24/typescript-express-registering-authenticating-jwt/), We've handled the whole authentication process manually. [NestJS documentation](https://docs.nestjs.com/techniques/authentication) suggests using the Passport library and provides us with the means to do so. Passport gives us an abstraction over the authentication, thus relieving from some heavy lifting. Also, it is heavy tested in production by many developers.
+> Diving into how to implement the authentication manually without Passport is still a good idea. By doing so, we can get an even better understanding of this process.
+
+Applications have different approaches to authentication. Passport calls those mechainsms **strategies**.
+The first strategy that we want to implement is the **passport-local** strategy. It is a strategy for authenticating with a username and password
+
+> npm install @nest/passport passport @type/passport-local passport-local @type/express
+
+To configure a strategy, we need to provide a set of options specific to a particular strategy. In NestJS, we do it by extending the `PassportStrategy` class.
+> authentication/authentication.ts
+
+```typescript
+import { Stategy } from 'passport-local';
+import { PassportStrategy } from '@nestjs/passport';
+import { injectable } from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+import User from '../users/user.entity';
+
+@injectable()
+export class LocalStategy extends PassportStrategy(Stategy) {
+  constructor(private authenticationService: AuthenticationService) {
+    super({
+      usernameField: 'email'
+    })
+  }
+
+  async validate(email: string, password: string): Promise<User> {
+    return this.authenticationService.getAuthenticatedUser(email, password);
+  }
+}
+```
+For very strategy, Passport calls the `validate` function using a set of parameter specific for a particular stategy. For the local stategy, Passport needs a method with username and a password.
+
+We also need to configure our `AuthenticationModule` to use passport
+
+> authentication/authentication.module.ts
+```typescript
+import { Module } from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+import { UsersModule } from '../user/users.module';
+import { AuthenticationController } from './authentication.controller';
+import { PassportModule } from '@nestjs/passport';
+import { LocalStategy } from './local.strategy';
+
+@Module({
+  imports: [UsersModule, PassportModule],
+  providers: [AuthenticationService, LocalStategy],
+  controllers: [AuthenticationController]
+})
+export class AuthenticationModule {}
+```
+
+## Using built-in Passport Guards
+The above module uses the [Guards](https://docs.nestjs.com/guards). Guard is reposible for determining whether the route handler handles the request or not. In its nature, it is similar to **Express.js middleware** but is more powerful.
+
+> We focus on guards quite a bit in the upcoming parts of this series and create custom guards. Today we only use the existing guards though.
+
+> authentication/authentication.controller.ts
+
+```typescript
+import { Body, Req, Controller, HttpCode, Post, UseGuards } 
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
