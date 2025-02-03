@@ -288,8 +288,94 @@ The above module uses the [Guards](https://docs.nestjs.com/guards). Guard is rep
 > authentication/authentication.controller.ts
 
 ```typescript
-import { Body, Req, Controller, HttpCode, Post, UseGuards } 
+import { Body, Req, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+import RegisterDto from './dto/register.dto';
+import RequestWithUser from './requestWithUser.interface';
+import { LocalAuthenticationGuard } from './localAuthentication.guard';
+
+@Controller('authentication')
+export class AuthenticationController {
+  constructor(
+    private readonly authenticationService: AuthenticationService
+  ) {}
+
+  @Post('register')
+  async register(@Body() registrationData: RegisterDto) {
+    return this.authenticationService.register(registrationData);
+  }
+
+  @HttpCode(200)
+  @UseGuards(LocalAuthenticationGuard)
+  @Post('log-in')
+  async logIn(@Req() request: RequestWithUser) {
+    const user = request.user;
+    user.password = undefined;
+    return user;
+  }
+}
 ```
+
+> Above we use `@HttpCode(200)` because NestJS responds with **201 Created** for **POST** requests by default
+
+> authentication/localAuthentication.guard.ts
+```typescript
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export class LocalAuthenticationGuard extends AuthGuard('local') {}
+```
+>> Passing the strategy name directly into `AuthGuard()` in the controller might not be considered a clean approach. Instead, we create our own class.
+
+> authentication/requestWithUser.interface.ts
+```typescript
+import { Request } from 'express';
+import User from '../users/user.entity';
+
+interface RequestWithUser extends Request {
+  user: User;
+}
+ 
+export default RequestWithUser;
+```
+Thanks to doing all of the above, our `log-in` oute is handled by Passport.  The data of the user is attached to the `request` object, and this is why we extend the `Request` interface.
+
+If the user authenticates successfully, we return his data. Otherwise, we throw an error.
+
+# Using JSON Web Tokens
+We aim to restrict some parts of application. By doing so, only authenticated users can access them. We don't want to need to authenticate for every request. Instead, we need a way to let the users indicate that they have already logged in successfully.
+
+A simple way to do so is use JSON Web Tokens. **JWT** is a string that is created on our server using a secret key, and only we can decode it. We want to give it to the user upon logging in so that it can be sent back on every request. If the token is valid, we can trust the identity of the user.
+
+```typescript
+npm install @nestjs/jwt passport-jwt @types/passport-jwt cookie-parser @types/cookie-parser
+```
+The first thing to do is to add two new environment variables: `JWT_SECRET` and `JWT_EXPIRATION_TIME`.
+
+We can use any thing as a JWT secret key. It is important to keep it secret and not to share it. We use it to encode and decode tokens in your application.
+
+We describe our expiration time in seconds to increase security. If someone's token is stolen, the attacker has access to the application in a similar way to having a password. Due to the expiry time, the issue is partially dealt with because the token will expire.
+
+>> app.module.ts
+```typescript
+ConfigModule.forRoot({
+  validationSchema: Joi.object({
+    //...
+    JWT_SECRET: Joi.string().required(),
+    JWT_EXPIRATION_TIME: Joi.string().required(),
+  })
+})
+```
+
+## Generating tokens
+
+
+
+
+
+
+
 
 
 
