@@ -369,9 +369,186 @@ ConfigModule.forRoot({
 ```
 
 ## Generating tokens
+In this article, we want to the users to store the JWT in **Cookies**. It has a certain advantage over storing tokens in the web storage thanks to the HttpOnly directive. It can't be accessed directly through JavaScript in the browser, making it more secure and resistant to attacks like [cross-site scripting](https://www.owasp.org/index.php/Cross-site_Scripting_(XSS)).
 
+> If you want to know more about cookies, check out [Cookie: explaining document.cookie and the Set-cookie header](http://wanago.io/2018/06/18/cookies-explaining-document-cookie-and-the-set-cookie-header/)
 
+Now, let's configure the `JwtModule`.
 
+>> authentication/authentication.module.ts
+
+```typescript
+import { Module } from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+import { UsersModule } from '../users/users.module';
+import { authenticationController } from './authentication.controller';
+import { PassportModule } from '@nestjs/passport';
+import { JwtModule } from '@nestjs/jwt';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+
+@Module({
+  imports: [
+    UserModule,
+    PassportModule,
+    ConfigModule,
+    JwtModule.registerAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (configService: ConfigService) => ({
+        secret: configService.get('JWT_SECRET'),
+        signOptions: {
+          expiresIn: `${configService.get('JWT_EXPIRATION_TIME')s}`,
+        }
+      })
+    })
+  ],
+  provides: [AuthenticationService, LocalStategy],
+  controllers: [AuthenticationController]
+})
+export class AuthenticationModule {}
+```
+Thanks to that, we can now uwe `JwtService` in our `AuthenticationService`.
+
+>> authentication/authentication.service.ts
+
+```typescript
+@Injectable()
+export class AuthenticationService {
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
+  ) {}
+
+  //...
+  public getCookieWithJwtToken(userId: number) {
+    const payload: TokenPayload = { userId };
+    const token = this.jwtService.sign(payload);
+    return `Authentication=${token}; HttpOnly; Path=/; Max-Age=${this.configService.get('JWT_EXPIRATION_TIME')}`;
+  }
+}
+```
+
+>> authentication/tokenPayload.interface.ts
+```typescript
+interface TokenPayload {
+  userId: number;
+}
+```
+
+We need to send the token created by `getCookieJwtToken` method when the user logs in successfully. We do it by sending the Set-Cookie header. To do so, we need to directly use the `Respone` object.
+
+```
+@HttpCode(200)
+@UseGuards(LocalAuthenticationGuard)
+@Post('log-in')
+async logIn(@Req() request: RequestWithUser, @Res() response: Respone) {
+  const {user} = request;
+  const cookie = this.authenticationService.getCookieWithJwtToken(user.id);
+  response.setHeader('Set-Cookie', cookie);
+  user.password = undefined;
+  return response.send(user);
+}
+```
+When the browser receives this response, it sets the cookie so that it can use it later.
+
+## Receiving tokens
+To be able to read cookies easily we need the `cookie-parser`.
+
+>> main.ts
+```typescript
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app,pdule';
+import * as cookieParser from './cookie-parser';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.use(cookieParser());
+  await app.listen(3000);
+}
+bootstrap();
+```
+
+Now, we need to read the token from the Cookie header when the user requests data. To do so, we need a second **passport strategy**.
+
+>> authentication/jwt.strategy.ts
+
+```typescript
+import { ExtractJwt, Strategy } from 'passport-jwt';
+import { PassportStrategy } from '@nestjs/passport';
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import { Request } from 'express';
+import { UsersService } from '../users/users.service';
+
+@Injectable()
+export class JwtStrategy extends PassportStrategy(Stategy) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly usersService: UsersService,
+  ) {
+    super({
+      jwtFromRequest: ExtractJwt.fromExtractors([(request: Request) => {
+        return request?.cookies?.Authentication;
+      }]),
+      secretOrKey: configService.get('JWT_SECRET')
+    })
+  }
+
+  async validate(payload: TokenPayload) {
+    return this.usersService.getById(payload.userId);
+  }
+}
+```
+
+There are a few notable things above. We extend the default JWT strategy by reading the token from the cookie.
+
+When we successfully access the token, we use the id of the user that is encode inside. With it, we can get the whole user data through the `userService.getById` method. We also need to add it to our `UserService`.
+
+>> users/users.service.ts
+```
+@Injectable()
+export class UsersService {
+  constructor(
+    @InjectRepository(User)
+    private usersRepository: Repository<User>
+  ) {}
+
+  async getById(id: number) {
+    const user = await this.usersRepository.findOne({ id });
+    if (user) {
+      return user;
+    }
+    throw new HttpException('User with this id does not exist', HttpStatus,NOT_FOUND);
+  }
+}
+```
+Thanks to the `validate` method running under the hood when the token is encoded, we have access to all of the user data.
+
+We now need to add our new `JwtStrategy` to the `AuthenticationModule`.
+
+>> authentication/authentication.module.ts
+
+```
+@Module({
+  // ...
+  providers: [AuthenticationService, LocalStrategy, JwtStrategy]
+})
+export class AuthenticationModule {}
+```
+## Requiring authentication from our users
+Now, we can require our users to authenticate when send requests to our API. To do so, we first need to create our `JwtAuthenticationGuard`.
+
+>> authentication/jwt-authentication.guard.ts
+```typescript
+import { Injectable } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
+
+@Injectable()
+export default class JwtAuthenticationGuard extends AuthGuard('jwt') {}
+```
+
+Now, we can use it every time we want ourt users to authenticate before making a request. For example, we might want to do so, when creating posts through our API.
 
 
 
