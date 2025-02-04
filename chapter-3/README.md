@@ -550,34 +550,74 @@ export default class JwtAuthenticationGuard extends AuthGuard('jwt') {}
 
 Now, we can use it every time we want ourt users to authenticate before making a request. For example, we might want to do so, when creating posts through our API.
 
+>> posts/posts.controller.ts
+```
+import { Body, Controller Post, UserGuard } from '@nestjs/common';
+import PostsService from './posts.service';
+import CreatePostDto from './dto/createPost.dto';
+import JwtAuthenticationGuard from './authentication/jwt-authentication.guard';
 
+@Controller('posts')
+export default class PostController {
+  constructor(
+    private readonly postsService: PostsService
+  ) {}
 
+  @Post()
+  @UseGuards(JwtAuthenticationGuard)
+  async createPost(@Body() post: CreatePostDto) {
+    return this.postsService.createPost(post);
+  }
 
+  //...
+}
+```
+# Logging out
+JSON Web Tokens are stateless. We can't change a token to be invalid in a straightforward way. The easily way to implement logging out is just to remove the token from the browser. Since the cookies that we designed are `HttpOnly`, we need to create an endpoint that clears it.
 
+>> authentication/authentication.service.ts
 
+```typescript
+export class AuthenticationService {
+  //...
 
+  public getCookieForLogOut() {
+    return `Authentication=; HttpOnly; Path=/; Max-Age=0`;
+  }
+}
+```
 
+>> authentication/authentication.controller.ts
 
+```
+@Controller('authentication')
+export class AuthenticationController {
+  // ...
+  @UserGuard(JwtAuthenticationGuard)
+  @Post('log-out')
+  async logOut(@Req() request: RequestWithUser, @Res() response: Respone) {
+    response.setHeader('Set-Cookie', this.authenticationService.getCookieForLogOut());
+    return response.sendStatus(200);
+  }
+}
+```
 
+# Verifying tokens
+One important additional functionally that we need to is verifying JSON Web Tokens and returning user data. By doing so, the browser can check if the current token is valid and get the data of the currently logged in user.
+```
+@Controller('authentication')
+export class AuthenticationController {
+  // ...
+  @UserGuard(JwtAuthenticationGuard)
+  @Get()
+  authenticate(@Req() request: RequestWithUser) {
+    const user = request.user;
+    user.password = undefined;
+    return user;
+  }
+}
+```
+![authenticate](https://wanago.io/wp-content/uploads/2020/05/Screenshot-from-2020-05-25-00-52-56.png)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Summary
+In this article, we're covered registering and logging in users in NestJS. To implement it, we've used bcrypt to has passwords to sercure them. To authenticate users, we've used JSON Web Tokens. There are still ways to improve the above features. For example, we should exclude passwords more cleanly. Also, we might want to might want to implement the token refreshing functionality. Stay tuned for more article about NestJS!
