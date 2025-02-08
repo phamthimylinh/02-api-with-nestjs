@@ -271,24 +271,39 @@ Please note that we don't use `@Param(':id')` anymore here. Instead, we destruct
 > If you use MongoDB instead of Postgres, the `@IsMongoId` decorator might prove to be useful for you here.
 
 # Handling PATCH
+In the [Typescript Express series](http://wanago.io/2020/04/27/typescript-express-put-vs-patch-mongodb-mongoose/), we discuss the difference between the PUT and PATCH method. Summing it up, PUT replaces an entity, while PATCH applies a partial modification. When performing partial changes, we need to skip missing properties.
 
+The most straightforward way to handle PATCH is to pass `skipMissingProperties` to our `ValidationPipe`.
 
+```typescript
+app.useGlobalPipes(new ValidationPipe({ skipMissingProperties: true }))
+```
 
+Unfortunately, this would skip missing properties in all of our DTOs. We don't want to do that when posting data. Instead, we could add `IsOptional` to all properties when updating data.
+```typescript
+import { IsString, IsNotEmpty, IsNumber, IsOptional } from 'class-validator';
 
+export class UpdatePostDto {
+    @IsString()
+    @IsOptional()
+    id: number;
 
+    @IsString()
+    @IsNotEmpty()
+    @IsOptional()
+    content: string;
 
+    @IsString()
+    @IsNotEmpty()
+    @IsOptional()
+    title: string;
+}
+```
+Unfortunately, the above solution is not very clean. There are some solutions provided to override the default behavior of the `ValidationPipe` [here](https://github.com/nestjs/nest/issues/2390).
+> In the upcoming parts of this series we look into how we can implement PUT instead of PATCH
 
+# Summary
+In this article, we've looked into how error handling and validation works in NestJS. Thanks to looking into how the default `BaseExceptionFilter` works under the hood, we now know how to handle various exceptions properly. We know also know how to change the default behavior if there is such a need.
+We've also how to use the `ValidationPipe` and the class-validator library to validate incoming data.
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+There is still a lot to cover in the NestJS framework, so stay tuned!.
