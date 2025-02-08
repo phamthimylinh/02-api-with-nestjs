@@ -189,11 +189,88 @@ There are a few notable things above. Since we use `@Catch(NotFoundException)`, 
 The `host.switchToHttp` method returns the `HttpArgumentsHost` object with information about the HTTP context. We explore it a lot in the upcoming parts of this series when discussing the [execution context](https://docs.nestjs.com/fundamentals/execution-context).
 
 # Validation
+We definitely should validate the upcoming data. In the [typescript express](http://wanago.io/2018/12/17/typescript-express-error-handling-validation/) series, we use the [class-validator library](https://www.npmjs.com/package/class-validator). NestJs also incorporates it.
+NestJs comes with a set built-in **pipes**. Pipes are usually used to either transform the input data or validate it. Today we only use the predefinded pipes, but in the upcoming parts of this series, we might look into creating custom ones.
 
+To start validating data, we need the `ValidationPipe`.
+>> main.ts
+```typescript
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import * as cookieParser from 'cookie-parse';
 
+async function bootstrap() {
+    const app = await NestFactory.create(AppModule);
+    app.useGlobalPipes(new ValidationPipe());
+    app.use(cookieParser());
+    await app.listen(3000);
+}
 
+bootstrap();
+```
+In the [first part of this series](http://wanago.io/2020/05/11/nestjs-api-controllers-routing-module/), we've created Data Transfer Objects. The define the format of the data sent in a request. They are a perfact place to attach validation.
 
+```typescript
+npm install class-validator clas-transformer
+```
 
+> For the `ValidationPipe` to work we also need the [class-transformer](https://www.npmjs.com/package/class-transformer) library.
+
+>>auth/dto/register.dto.ts
+
+```typescript
+import { IsEmail, IsString, IsNotEmpty, MinLength } from 'class-validator';
+
+export class RegisterDto {
+    @IsEmail()
+    email: string;
+
+    @IsString()
+    @IsNotEmpty()
+    name: string;
+
+    @IsString()
+    @IsNotEmpty()
+    @MinLength(7)
+    password: string;
+}
+
+export default ResgisterDto;
+```
+
+Thanks to the fact that we use the above `ResgisterDto` with the `@Body()` decorator, the `ValidationPipes` now checks the data.
+
+```typescript
+@Post('resgister')
+async register(@Body() registrationData: RegisterDto) {
+    return this.authenticationService.register(resgisterData);
+}
+```
+![response validate](https://wanago.io/wp-content/uploads/2020/05/Screenshot-from-2020-05-31-18-56-58.png)
+
+There are a lot more decorators that we can use. For a full list, check out the [class-validator documentation](https://github.com/typestack/class-validator). You can also [create custom validation decorators](https://github.com/typestack/class-validator#custom-validation-decorators).
+
+## Validating params
+We can also the class-validator library to validate params.
+>> utils/findOneParams.ts
+```typescript
+import { IsNumberString } from 'class-validator';
+class FindOneParams {
+    @IsNumberString()
+    id: string;
+}
+```
+```typescript
+@Get(':id')
+getPostById(@Param() { id }: FindOneParams) {
+    return this.postsService.getPostById(Number(id));
+}
+```
+Please note that we don't use `@Param(':id')` anymore here. Instead, we destructure the whole params object.
+
+> If you use MongoDB instead of Postgres, the `@IsMongoId` decorator might prove to be useful for you here.
+
+# Handling PATCH
 
 
 
