@@ -152,7 +152,7 @@ The above is a neat little trick that we use to take advantage of the mechanisms
 
 # Custom interceptors
 
-
+Above, we use the `@Transform` decorator to skip a single property if it equals null. Doing so for every nullable property does not seem like a clean approach.
 
 
 
