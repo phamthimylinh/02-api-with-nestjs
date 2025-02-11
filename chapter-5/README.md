@@ -154,8 +154,58 @@ The above is a neat little trick that we use to take advantage of the mechanisms
 
 Above, we use the `@Transform` decorator to skip a single property if it equals null. Doing so for every nullable property does not seem like a clean approach.
 
+Fortunately, aside from using the `ClassSerializerInterceptor`, we can create our own [interceptors](https://docs.nestjs.com/interceptors). Interceptors can serve various purposes, and one of them is manipulating the request/response stream.
 
+>> utils/excludeNull.interceptor.ts
+```typescript
+import { Injectable, NestInterceptor, ExecutionContext, CallHandler} from '@nestjs/common';
+import { Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
+import recursivelyStripNullValues from './recursivelyStripNullValues';
 
+@Injectable()
+export class ExcludeNullInterceptor implements NestInterceptor {
+    intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
+        return next
+            .handle()
+            .pipe(map(value => recursivelyStripNullValues(value)));
+    }
+}
+```
+Each interceptor needs to implement the `NestInterceptor` and, therefore, the `intercept` method. It takes two arguments:
+1. `ExecutionContext`
+- It provides information about the current context
+2. `CallHandler`
+- It contains the `handle` method that invokes the route handler and returns an [RxJS Observable](https://github.com/ReactiveX/rxjs)`
 
+The `intercept` method wraps the request/response stream, and we can add logic both before and after the execution of the router handler.
+In the above code, we invoke the route handle and modify the response.
 
+Since there are quite a few places in the NestJS framework that make use of RxJS, the [official Typescript starter](https://github.com/nestjs/typescript-starter) already contains it.
 
+>> ultils/recursivelyStripNullValues.ts
+```typescript
+function recursivelyStripNullValues(value: unknown) {
+    if (Array.isArray(value)) {
+        return value.map(recursivelyStripNullValues);
+    }
+
+    if (value !== null && typeof value === 'object') {
+        return Object.fromEntries(
+            Object.entries(value).map(([key, value]) => [ key, recursivelyStripNullValues(value)])
+        )
+    }
+
+    if (value !== null) {
+        return value;
+    }
+}
+```
+In the above function, we recursively travel the data structure and preserve values only if they differ from *null*. It works both for arrays and plain objects.
+
+> If you want to know more about recursion in JavaScript, check out [Using recursion to traverse data structures. Execution context and the call stack](http://wanago.io/2018/11/26/using-recursion-to-traverse-data-structures-execution-context-and-the-call-stack/)
+
+Also, every recursive function can be turned into an iterative one
+
+# Summary
+In this article, we've looked into how we can modify the response that we send back to our users. While the most straightforward way to do so is to serialize the response with `ClassSerializerInterceptor`, we can also create our own interceptor. We've also looked into how we can bypass the issue of using the `@Res()` decorator.
