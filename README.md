@@ -6,4 +6,5 @@
 - [Chapter 3: Authenticating user with bycrypt, Passport, JWT, and cookies](/chapter-3/README.md)
 - [Chapter 4: Error handling and data validation](/chapter-4/README.md)
 - [Chapter 5: Serializing the respone with interceptors](/chapter-5/README.md)
+- [Chapter 6: Looking into dependency injection and modules](/chapter-6/README.md)
 
