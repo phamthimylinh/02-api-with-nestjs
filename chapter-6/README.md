@@ -45,3 +45,53 @@ const authenticationController = new AuthenticationController(authenticationServ
 >> If you want to know more about IoC, check out [Applying SOLID principles to your Typescript code](http://wanago.io/2020/02/03/applying-solid-principles-to-your-typescript-code/)
 
 While doing the above helps us overcome the mentioned issues, it is far from convenient. This is why NestJS implements a **Dependency Injection** mechanism that provides all of the necessary dependencies automatically.
+
+# Dependency Injection in NestJS under the hood
+Let's look at a similar controller that we've built in the [third part of this series](http://wanago.io/2020/05/25/api-nestjs-authenticating-users-bcrypt-passport-jwt-cookies/).
+
+```typescript
+import { Controller} from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+
+@Controller('authentication')
+export class AuthenticationController {
+    constructor(
+        private readonly authenticationService: AuthenticationService
+    ) {}
+}
+```
+> Thanks to using the `private readonly`, we don't need to asign the `authenticationService` in the body of the constructor.
+
+The `@Controller` decorator, among other things, ensures that the metadata about our class is saved. The `@Injectable` decorator also does this.
+
+```typescript
+import { Injectable } from '@nestjs/common';
+import { UsersService } from '../users/users.service';
+import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
+
+@Injectable()
+export class AuthenticationService {
+    constructor(
+        private readonly usersService: UsersService,
+        private readonly jwtService: JwtService,
+        private readonly configService: ConfigService
+    ) {}
+}
+```
+TypeScript compiler emits the metadata that NestJS can later use to figure out what dependencies do we need. Let's inspect the output of the `AuthenticationService`.
+```typescript
+AuthenticationService = __decorate([
+    common_1.Injectable(),
+    __metadata("design:paramtypes", [
+        users_service_1.UsersService,
+        jwt_service_1.JwtService,
+        config_service_1.ConfigService
+    ])
+], AuthenticationService);
+```
+The `design:paramtypes` is a key describing parameter ty metadata. Thanks to it, we can obtain an array of references to classes that we need in the constructor of the `AuthenticationService`. We can perceive it as extracting the dependencies of the `AuthenticationService` at the compiler time.
+NestJS uses the [reflect-metadata](https://www.npmjs.com/package/reflect-metadata) package under the hood to work with the above metadata.
+
+When a NestJS application starts, it resolves all the metadata the `AuthenticationController` needs. It might get quite complex under the hood, as [it can deal with circular dependencies](), for example.
+> If you want to dig deeper into how NestJS supplies the required dependencies, check out [this talk by Kamil Mysliwiec](https://www.youtube.com/watch?v=vYFhHVMetPg), the creator of NestJS.
