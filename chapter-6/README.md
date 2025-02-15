@@ -95,3 +95,98 @@ NestJS uses the [reflect-metadata](https://www.npmjs.com/package/reflect-metadat
 
 When a NestJS application starts, it resolves all the metadata the `AuthenticationController` needs. It might get quite complex under the hood, as [it can deal with circular dependencies](), for example.
 > If you want to dig deeper into how NestJS supplies the required dependencies, check out [this talk by Kamil Mysliwiec](https://www.youtube.com/watch?v=vYFhHVMetPg), the creator of NestJS.
+
+# Modules
+A module is a part of our application that holds functionalities that revolve around a particular feature.
+
+Every NestJS application has a root module. It serves as a starting point for NestJS when creating an **application graph**.
+
+```typescript
+import { Module } from '@nestjs/common';
+import { PostsModule } from './posts/posts.module';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
+import { AuthenticationModule } from './authentication/authentication.module';
+import { UsersModule } from './users/users.module';
+
+@Module({
+    imports: [
+        PostsModule,
+        ConfigModule.forRoot({
+            // ...
+        }),
+        DatabaseModule,
+        AuthenticationModule,
+        UsersModule
+    ],
+    providers: [],
+    controllers: []
+})
+export class AppModule {}
+```
+NestJS uses the root module to resolve other modules along with their dependencies. For example, we have the `AuthenticationModule` that takes care of the authentication in our application. We create it in the [third part of this series](http://wanago.io/2020/05/25/api-nestjs-authenticating-users-bcrypt-passport-jwt-cookies/) to handle the process of registering and verifying users.
+```
+
+├── authentication
+│   ├── authentication.controller.ts
+│   ├── authentication.module.ts
+│   ├── authentication.service.ts
+│   ├── dto
+│   │   ├── logIn.dto.ts
+│   │   └── register.dto.ts
+│   ├── jwtAuthentication.guard.ts
+│   ├── jwt.strategy.ts
+│   ├── localAuthentication.guard.ts
+│   ├── local.strategy.ts
+│   ├── requestWithUser.interface.ts
+│   └── tokenPayload.interface.ts
+```
+As you can see from the `authentication` directory, a module can contain many things. In the above, it wraps the controller, service, and some other files connected to the authentication process.
+
+During authentication, we also need to read and create users. To endcapsulate this process, we created a separate `UsersModule`. This shows that the modules are useful in dividing ourt app into pieces that work together.
+Let's inspect how we can use the `UsersService` within the `AuthenticationModule`. To do so, we first need to look into the `UsersModule`.
+
+>> users/users.module.ts
+```typescript
+import { Module } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { User } from './user.entity';
+
+@Module({
+    imports: [TypeOrmModule.forFeature([User])],
+    providers: [UsersService],
+    exports: [UsersService]
+})
+export class UsersModule {}
+```
+The crucial part here are the `providers` and `exports` arrays.
+
+A provider is comething that can `inject` dependencies. An example of such is a service. We put the `UsersService` into the `providers` array of the `UsersModule` to state that it belongs to that module.
+As you can see above, a module can also import other modules. By putting the `UsersService` into the `exports` array, we indicate that the module expose it. We can think of it as a public interface of a module.
+
+>> authentication/authentication.module.ts
+```typescript
+import { Module } from '@nestjs/common';
+import { AuthenticationService } from './authentication.service';
+import { UsersModule } from '../users/users.module';
+import { AuthenticationController } from './authentication.controller';
+import { LocalStrategy } from './local.strategy';
+import { JwtStrategy } from './jwt.strategy';
+
+@Module({
+    imports: [
+        UsersModule,
+        //...
+    ],
+    providers: [AuthenticationService, LocalStrategy, JwtStrategy],
+    controllers: [AuthenticationController]
+})
+
+export class AuthenticationModule {}
+```
+Now, when we import the `UsersModule`, we have access to all of the exported provides. Thanks to that, we can use `UsersService` within the `AuthenticationModule`.
+
+
+
+
