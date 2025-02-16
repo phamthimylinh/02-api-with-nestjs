@@ -187,6 +187,23 @@ export class AuthenticationModule {}
 ```
 Now, when we import the `UsersModule`, we have access to all of the exported provides. Thanks to that, we can use `UsersService` within the `AuthenticationModule`.
 
+The significant thing is that in NestJS, modules are **singletons**. It means that the instance of the `UsersService` is shared across all modules. The above would be especially crucial when considering techniques like in-memory catching.
 
+## The @Global() decorator
+Although creating global modules might be discouraged and perceived as a bad design decision, it definitely is possible.
+When we want a set of providers to be available everywhere, we can use the `@Global()` decorator.
 
+```typescript
+@Global()
+@Module({
+    imports: [TypeOrmModule.forFeature([User])],
+    providers: [UsersService],
+    exports: [UsersService]
+})
+export class UsersModule {}
+```
+Now, we don't need to import the `UsersModule` to use the `UsersService`.
+We should register a global module once, and the bes place for that is the root module.
 
+# Summary
+In this article, we've dug deeper into how NestJS works with modules and how it resolves their dependencies. We've inspected a bit on what principles the Dependency Injection works in NestJS. Learning about some of the inner mechanisms in the framework can help us to understand it better and, therefore, create a more sophisticated application structure.
