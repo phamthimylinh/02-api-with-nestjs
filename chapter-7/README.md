@@ -132,7 +132,22 @@ public address: Address;
 ```
 Now, every time we fetch users, we also get their addresses. Only one side of the relationship can be eager.
 
+# Saving the related entities
+Right now, we need to save users and addresses separately and this might not be the most convenient way. Instead, we can turn on the **cascade** option. Thanks to that, We can saving an address while saving a user.
 
+```typescript
+@OneToOne(() => Address, {
+    cascade: true,
+    eager: true,
+})
+@JoinColumn()
+public address: Address;
+```
+
+![cascade option](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-19-49-32.png)
+```
+
+# One-to-many and many-to-one
 
 
 
