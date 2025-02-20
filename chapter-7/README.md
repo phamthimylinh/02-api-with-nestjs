@@ -83,6 +83,55 @@ Both `ON UPDATE NO ACTION` and `ON DELETE NOT ACTION` are a default behavior. Th
 The `MATCH SIMPLE` refers to a situation when we use more than one column as the foreign key. It means that we allow some of them to be null.
 
 ## Inverse relationship
+Currently, our relationship is *unidirectional*. It means that only one side of the relationship has information about the other side. We could change that by creating an **inverse relationship**. By doing so, we make the relationship between the User and Address **bidirectional**.
+To create the inverse relationship, we need to use the `@OneToOne()` and provide a property that holds the other side of the relationship.
+
+>> users/address.entity.ts
+```typescript
+import { Column, Entity, OneToOne, PrimaryGeneratedColumn } from "typeorm";
+import { User } from "./user.entity";
+
+@Entity()
+class Address {
+    @PrimaryGeneratedColumn()
+    public id: number;
+
+    @Column()
+    public street: string;
+
+    @Column()
+    public city: string;
+
+    @Column()
+    public country: string;
+
+    @OneToOne(()=> User, (user: User)=> user.address)
+    public user: User;
+}
+export default Address;
+```
+The crucial thing is that the **inverse relationship** is a bit of an abstract concept, and it does not created nay additional columns in the database.
+
+![column for inverse relationship](http://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-19-10-28-1.png)
+
+Storing the information about both sides of the relationship can come in handy. We can easily relate to both sides, for example, to fetch the addresses with users.
+
+```typescript
+getAllAddressesWithUsers() {
+    return this.addressRepository.find({relations:['user']})
+}
+```
+
+if we want our related entities always to be included, we can make our relationship **eager**.
+```typescript
+@OneToOne(() => Address, {
+    eager: true,
+})
+@JoinColumn()
+public address: Address;
+```
+Now, every time we fetch users, we also get their addresses. Only one side of the relationship can be eager.
+
 
 
 
