@@ -145,9 +145,118 @@ public address: Address;
 ```
 
 ![cascade option](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-19-49-32.png)
-```
+
 
 # One-to-many and many-to-one
+The **one-to-many** and **many-to-one** is a relationship where a row from the first table can be linked to multiple rows of the second table.
+Rows from the second table can be linked to just one row of the first table.
+
+The above is a very fitting relationship to implement to posts and users that we've defined in the previous parts of this series. Let's assume that a user can create multiple posts, but a post has just one author.
+
+>> users/user.entity.ts
+```typescript
+import { Column, Entity, JoinColumn, OneToOne, OneToMany, PrimaryGeneratedColumn } from "typeorm";
+import { Exclude } from "class-transformer";
+import Address from "./address.entity";
+import Post from "./post.entity";
+
+@Entity()
+class User {
+    @PrimaryGeneratedColumn()
+    public id: number;
+
+    @Column({ unique: true })
+    public email: string;
+
+    @Column()
+    public name: string;
+
+    @Column()
+    @Exclude()
+    public password: string;
+
+    @OneToOne(() => Address, {
+        eager: true,
+        cascade: true,
+    })
+    @JoinColumn()
+    public address: Address;
+
+    @OneToMany(() => Post, (post: Post) => post.author)
+    public posts: Post[];
+}
+export default User;
+```
+Thanks to using the `@OneToMany()` decorator, one user can be linked to multiple posts. We also need to define the other side of this relationship.
+
+```typescript
+import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from "typeorm";
+import User from "./user.entity";
+
+@Entity()
+class Post {
+    @PrimaryGeneratedColumn()
+    public id: number;
+
+    @Column()
+    public title: string;
+
+    @Column()
+    public content: string;
+
+    @Column({ nullable: true })
+    public category?: string;
+
+    @ManyToOne(() => User, (author: User) => author.posts)
+    public author: User;
+}
+export default Post;
+```
+
+Thanks to `@ManyToOne()` decorator, many posts can be related to one user.
+
+We implemented the authentication in the [third part of this series](http://wanago.io/2020/05/25/api-nestjs-authenticating-users-bcrypt-passport-jwt-cookies/). When a post is created in our API, we have access to the data about the authenticated user. We need to use it to determine the author of the post.
+
+```typescript
+@Post()
+@UseGuards(JwtAuthenticationGuard)
+async createPost(@Body() post: CreatePostDto, @Req() req: RequestWithUser) {
+    return this.postsService.create(post, req.user);
+}
+```
+```typescript
+async createPost(post: CreatePostDto, user: User) {
+    const newPost = await this.postsRepository.create({
+        ...post,
+        author: user
+    });
+    await this.postsRepository.save(newPost);
+    return newPost;
+}
+```
+If we want to return a list of posts with the authors, we can now easily do so.
+
+```typescript
+getAllPosts() {
+    return this.postsRepository.find({ relations: ['author'] });
+}
+async getPostById(id: number) {
+    const post = await this.postsRepository.findOne(id, { relations: ['author'] });
+    if (post) {
+        return post;
+    }
+    throw new PostNotFoundException(id);
+}
+```
+![response one-to-many](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-21-54-45.png)
+ If we look into the database, we can see that the side of the relationship that  user `ManyToOne()` decorator stores the foreign key.
+ ![table user](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-21-54-45.png)
+ This means that the post stores the id of the author and not the other way around.
+
+# Many-to-many
+
+
+
 
 
 
