@@ -254,34 +254,111 @@ async getPostById(id: number) {
  This means that the post stores the id of the author and not the other way around.
 
 # Many-to-many
+Previously, we add a property called **category** to our posts. Let's elaborate on that more.
+We would like to be able define categories reused across posts. We also want a single post to belong to multiple categories.
+The above is **many-to-many** relationship. It happens when a row from the first table can be link to multiple rows from the second table and the other way around.
 
+>> categories/category.entity.ts
+```typescript
+import { Column, Entity, PrimaryGeneratedColumn } from "typeorm";
 
+@Entity()
+class Category {
+    @PrimaryGeneratedColumn()
+    public id: number;
 
+    @Column()
+    public name: string;
+}
+export default Category;
+```
+>> posts/posts.entity.ts
+```typescript
+import { Column, Entity, JoinTable, ManyToOne, ManyToMany, PrimaryGeneratedColumn } from "typeorm";
+import User from "./user.entity";
+import Category from "./category.entity";
 
+@Entity()
+class Post {
+    @PrimaryGeneratedColumn()
+    public id: number;
 
+    @Column()
+    public title: string;
 
+    @Column()
+    public content: string;
 
+    @Column({ nullable: true })
+    public category?: string;
 
+    @ManyToOne(() => User, (author: User) => author.posts)
+    public author: User;
 
+    @ManyToMany(() => Category)
+    @JoinTable()
+    public categories: Category[];
+}
+export default Post;
+```
+When we use `@ManyToMany()` and `@JoinTable()` decorators, TypeORM set ups and additional table. This way, neither the Post nor Category tables stores the data about the relationship.
 
+```typescript
+CREATE TABLE public.post_categories_category (
+    "postId" integer NOT NULL,
+    "categoryId" integer NOT NULL,
+    CONSTRAINT "PK_91306c0021c4901c1825ef097ce" PRIMARY KEY ("postId", "categoryId"),
+    CONSTRAINT "FK_1e4e2f1b1b2e3c2b4e3c2b4e3c2" FOREIGN KEY ("postId") 
+        REFERENCES public.post (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION,
+    CONSTRAINT "FK_6a6b4b5d9b2e3c2b4e3c2b4e3c2" FOREIGN KEY ("categoryId") 
+        REFERENCES public.category (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE NO ACTION
+)
+```
+Above we can see that our new `post_categories_category` table uses a primary key that consists of the `postId` and `categoryId`. It also uses the `postId` and `categoryId` combined.
+![respone](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-22-59-38.png)
 
+we are also make the **many-to-many** relationship bidirectional. Remember to use the JoinTable decorator only on one side of the relationship, through.
+```typescript
+@ManyToMany(() => Category, (category: Category) => category.posts)
+@JoinTable()
 
+public categories: Category[];
+```
 
+```typescript
+@ManyToMany(() => Post, (post: Post) => post.categories)
+public posts: Post[];
+```
+Thanks to doing the above, we can easily fetch categories along with their posts.
 
+```typescript
 
+getAllCategories() {
+  return this.categoriesRepository.find({ relations: ['posts'] });
+}
 
+async getCategoryById(id: number) {
+  const category = await this.categoriesRepository.findOne(id, { relations: ['posts'] });
+  if (category) {
+    return category;
+  }
+  throw new CategoryNotFoundException(id);
+}
 
+async updateCategory(id: number, category: UpdateCategoryDto) {
+  await this.categoriesRepository.update(id, category);
+  const updatedCategory = await this.categoriesRepository.findOne(id, { relations: ['posts'] });
+  if (updatedCategory) {
+    return updatedCategory
+  }
+  throw new CategoryNotFoundException(id);
+}
+```
+![response many-to-many relationship](https://wanago.io/wp-content/uploads/2020/06/Screenshot-from-2020-06-21-22-58-41.png)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+# Summary
+This time we've covered creating relationships while using NestJS with Postgres and TypeORM. It included one-to-one, one-to-many and many-to-many. We supplied them with various options, such as `cascade` and `earge`. We've also looked into SQL queries thay TypeORM create, understanding better how it works.
